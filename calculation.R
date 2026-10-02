@@ -100,7 +100,7 @@ baseline=list()
 for(c in 1:5)
 {
   epicenter=urban.pop$city[c]; pop=urban.pop$pop.m[c]*1e6
-  flight.out=as.data.frame(read.csv(paste0(address.pre,'data/',epicenter,'.travel.csv')))
+  flight.out=as.data.frame(read.csv(paste0(epicenter,'.travel.csv')))
   #airport.list=unique(flight.out$airport)
   if(epicenter!='Wuhan'){
     flight.out=flight.out%>%left_join(aircraft.load,by='aircraft')
@@ -111,3 +111,32 @@ for(c in 1:5)
   n.t=length(infectious.p)
   baseline[[c]]=prob.by.epicenter(epicenter, 1,1, 0.5,infectious.p,c(0,0))
 }
+#individual airport at varying plane-sampling probabilities
+#assuming Wuhan the epicenter and taking PEK as an example
+epicenter = urban.pop$city[1]; pop = urban.pop$pop.m[1] * 1e6
+flight.out = as.data.frame(read.csv(paste0(epicenter,'.travel.csv')))
+infectious.p = infectious[1:45]/pop #until Jan 22, 2020 only
+airport = 'PEK'
+tau.candidate = seq(0,1,0.01) #different sampling probabilities 
+p_cum = lapply(tau.candidate, function(k){
+  p_t = prob.positive.global(airport,k,gamma = 1, p.test = 0.5,infectious.p) #prob. of detection on day t
+  1 - cumprod(1 - p_t) #prob. of detection by day t
+}) 
+
+
+#Miscellaneous: case fit
+#case count
+y=cases$cum.cases[10:34]
+#linear regression 
+res=lm(y~t, data=data.frame(y=log(y),t=seq_along(y)))
+r=exp(res$coefficients[-1])
+y.fitted=exp(res$fitted.values)
+#reporting rate
+t.range=1-75:1 #starting from Nov 1, 2019
+y0=exp(predict(res, newdata=data.frame(t=t.range))) #predicted reported case counts
+symp=0.2 #symptomatic rate
+range1= 1:32; x1=cases.early$Date[range1]-as.Date('2019-10-31'); y1=cases.early$cum.unrelated.cases[range1]
+candidate=seq(0.1,20,0.1)/100
+#MLE (Poisson distribution)
+rr.l=as.vector(do.call('cbind',lapply(candidate, function(rr) sum(dpois(y1, y0[x1]/rr*symp,log=T)) )))
+rr.fit=candidate[which.max(rr.l)] #0.012                                                 
